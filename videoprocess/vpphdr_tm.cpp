@@ -224,16 +224,16 @@ hdrtm_filter_init(VABufferID *filter_param_buf_id, uint32_t tm_type)
 }
 
 static VAStatus
-hdrtm_metadata_init(VAHdrMetaData &out_metadata, uint32_t tm_type)
+hdrtm_metadata_init(VAHdrMetaData &out_metadata, uint32_t tm_type, VAHdrMetaDataHDR10 *out_hdr10_metadata)
 {
     VAStatus va_status = VA_STATUS_SUCCESS;
 
-    VAHdrMetaDataHDR10 out_hdr10_metadata = {}; 
+    //VAHdrMetaDataHDR10 out_hdr10_metadata = {}; 
 
-    out_hdr10_metadata.max_display_mastering_luminance = g_out_max_display_luminance;
-    out_hdr10_metadata.min_display_mastering_luminance = g_out_min_display_luminance;
-    out_hdr10_metadata.max_content_light_level         = g_out_max_content_luminance;
-    out_hdr10_metadata.max_pic_average_light_level     = g_out_pic_average_luminance;
+    out_hdr10_metadata->max_display_mastering_luminance = g_out_max_display_luminance;
+    out_hdr10_metadata->min_display_mastering_luminance = g_out_min_display_luminance;
+    out_hdr10_metadata->max_content_light_level         = g_out_max_content_luminance;
+    out_hdr10_metadata->max_pic_average_light_level     = g_out_pic_average_luminance;
     printf("hdrtm_metadata_init g_out_max_display_luminance %d, g_out_min_display_luminance %d\n", g_out_max_display_luminance, g_out_min_display_luminance);
     printf("hdrtm_metadata_init g_out_max_content_luminance %d, g_out_pic_average_luminance %d\n", g_out_max_content_luminance, g_out_pic_average_luminance);
 
@@ -241,24 +241,24 @@ hdrtm_metadata_init(VAHdrMetaData &out_metadata, uint32_t tm_type)
     switch (tm_type)
     {
     case VA_TONE_MAPPING_HDR_TO_HDR:
-        out_hdr10_metadata.display_primaries_x[0] = 8500;
-        out_hdr10_metadata.display_primaries_y[0] = 39850;
-        out_hdr10_metadata.display_primaries_x[1] = 35400;
-        out_hdr10_metadata.display_primaries_y[1] = 14600;
-        out_hdr10_metadata.display_primaries_x[2] = 6550;
-        out_hdr10_metadata.display_primaries_y[2] = 2300;
-        out_hdr10_metadata.white_point_x = 15635;
-        out_hdr10_metadata.white_point_y = 16450;
+        out_hdr10_metadata->display_primaries_x[0] = 8500;
+        out_hdr10_metadata->display_primaries_y[0] = 39850;
+        out_hdr10_metadata->display_primaries_x[1] = 35400;
+        out_hdr10_metadata->display_primaries_y[1] = 14600;
+        out_hdr10_metadata->display_primaries_x[2] = 6550;
+        out_hdr10_metadata->display_primaries_y[2] = 2300;
+        out_hdr10_metadata->white_point_x = 15635;
+        out_hdr10_metadata->white_point_y = 16450;
         break;
     case VA_TONE_MAPPING_HDR_TO_SDR:
-        out_hdr10_metadata.display_primaries_x[0] = 15000;
-        out_hdr10_metadata.display_primaries_y[0] = 30000;
-        out_hdr10_metadata.display_primaries_x[1] = 32000;
-        out_hdr10_metadata.display_primaries_y[1] = 16500;
-        out_hdr10_metadata.display_primaries_x[2] = 7500;
-        out_hdr10_metadata.display_primaries_y[2] = 3000;
-        out_hdr10_metadata.white_point_x = 15635;
-        out_hdr10_metadata.white_point_y = 16450;
+        out_hdr10_metadata->display_primaries_x[0] = 15000;
+        out_hdr10_metadata->display_primaries_y[0] = 30000;
+        out_hdr10_metadata->display_primaries_x[1] = 32000;
+        out_hdr10_metadata->display_primaries_y[1] = 16500;
+        out_hdr10_metadata->display_primaries_x[2] = 7500;
+        out_hdr10_metadata->display_primaries_y[2] = 3000;
+        out_hdr10_metadata->white_point_x = 15635;
+        out_hdr10_metadata->white_point_y = 16450;
         break;
     default:
         break;
@@ -296,7 +296,8 @@ video_frame_process(VASurfaceID in_surface_id,
     }
 
     hdrtm_filter_init(&filter_param_buf_id, g_tm_type);
-    hdrtm_metadata_init(out_metadata, g_tm_type);
+    VAHdrMetaDataHDR10 *out_hdr10_metadata = (VAHdrMetaDataHDR10*)malloc(sizeof(VAHdrMetaDataHDR10));
+    hdrtm_metadata_init(out_metadata, g_tm_type, out_hdr10_metadata);
 
     /* Fill pipeline buffer */
     surface_region.x = 0;
@@ -557,6 +558,11 @@ bool read_frame_to_surface(FILE *fp, VASurfaceID surface_id)
         u_size = (va_image.width / 2 * bytes_per_pixel) * (va_image.height >> 1);
 
         src_buffer = (unsigned char*)malloc(frame_size);
+        if (src_buffer)
+        {
+            printf("malloc buffer failed \n");
+            return false;
+        }
         fread(src_buffer, 1, frame_size, fp);
 
         y_src = src_buffer;
@@ -657,6 +663,11 @@ bool write_surface_to_frame(FILE *fp, VASurfaceID surface_id)
         bytes_per_pixel = (va_image.format.fourcc == VA_FOURCC_P010) ? 2 : 1;
         frame_size = va_image.width * va_image.height * bytes_per_pixel * 3 / 2;
         dst_buffer = (unsigned char*)malloc(frame_size);
+        if (dst_buffer)
+        {
+            printf("malloc buffer failed \n");
+            return false;
+        }
         y_size = va_image.width * va_image.height * bytes_per_pixel;
         u_size = (va_image.width / 2 * bytes_per_pixel) * (va_image.height >> 1);
         y_dst = dst_buffer;
@@ -681,7 +692,12 @@ bool write_surface_to_frame(FILE *fp, VASurfaceID surface_id)
     case VA_FOURCC_A2B10G10R10:
     case VA_FOURCC_A2R10G10B10:
         frame_size = va_image.width * va_image.height * 4;
-        dst_buffer = (unsigned char*)malloc(frame_size);        
+        dst_buffer = (unsigned char*)malloc(frame_size);
+        if (dst_buffer)
+        {
+            printf("malloc buffer failed \n");
+            return false;
+        }
         y_dst = dst_buffer;
         y_src = (unsigned char*)in_buf + va_image.offsets[0];         
 
